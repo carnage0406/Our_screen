@@ -2,6 +2,8 @@ package com.example.ui.player
 
 import android.net.Uri
 import android.util.Log
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.VideoView
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -140,6 +142,15 @@ fun MoviePlayerView(
     AndroidView(
       factory = { ctx ->
         VideoView(ctx).apply {
+          layoutParams = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+          )
+          setOnErrorListener { _, what, extra ->
+            Log.w("MoviePlayerView", "MediaPlayer error: what=$what, extra=$extra. Suppressed.")
+            isVideoLoaded = true
+            true
+          }
           val uri = Uri.parse(movie.videoUrl)
           val headers = mapOf("User-Agent" to "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36")
           try {
@@ -156,11 +167,6 @@ fun MoviePlayerView(
             if (isPlaying) {
               start()
             }
-          }
-          setOnErrorListener { _, what, extra ->
-            Log.w("MoviePlayerView", "MediaPlayer error: what=$what, extra=$extra. Suppressed.")
-            isVideoLoaded = true
-            true
           }
           videoViewRef = this
         }
