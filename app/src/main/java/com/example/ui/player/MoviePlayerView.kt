@@ -215,7 +215,7 @@ fun MoviePlayerView(
           }
           Spacer(modifier = Modifier.height(12.dp))
           Text(
-            text = "Broadcasting Your Screen",
+            text = "Broadcasting Screen Live",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = Color.White
@@ -226,6 +226,28 @@ fun MoviePlayerView(
             style = MaterialTheme.typography.bodySmall,
             color = CinemaSecondary
           )
+          Spacer(modifier = Modifier.height(6.dp))
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+              .clip(RoundedCornerShape(8.dp))
+              .background(CinemaSuccess.copy(alpha = 0.15f))
+              .padding(horizontal = 8.dp, vertical = 4.dp)
+          ) {
+            Box(
+              modifier = Modifier
+                .size(6.dp)
+                .clip(CircleShape)
+                .background(CinemaSuccess)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+              text = "Presenter camera & audio active simultaneously",
+              fontSize = 10.sp,
+              color = CinemaSuccess,
+              fontWeight = FontWeight.Medium
+            )
+          }
         }
       }
     }

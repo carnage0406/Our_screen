@@ -22,18 +22,31 @@ data class ScreenShareInfo(
   val resolution: String = "1080p 60fps",
   val bitrate: String = "6.5 Mbps",
   val latencyMs: Int = 18,
-  val sharedAudio: Boolean = true
+  val sharedAudio: Boolean = true,
+  val presenterName: String = "You"
+)
+
+data class Participant(
+  val id: String,
+  val name: String,
+  val isMe: Boolean = false,
+  val isConnected: Boolean = true,
+  val isCameraOn: Boolean = true,
+  val isMicMuted: Boolean = false,
+  val isScreenSharing: Boolean = false,
+  val isFrontCamera: Boolean = true,
+  val pingMs: Int = 24
 )
 
 data class FriendParticipant(
   val name: String = "Jordan",
-  val isConnected: Boolean = true,
+  val isConnected: Boolean = false,
   val isCameraOn: Boolean = true,
   val isMicMuted: Boolean = false,
   val isSpeaking: Boolean = false,
   val reactionEmoji: String? = null,
   val pingMs: Int = 24,
-  val currentMood: String = "Excited! 🍿"
+  val currentMood: String = "Watching! 🍿"
 )
 
 data class ChatMessage(

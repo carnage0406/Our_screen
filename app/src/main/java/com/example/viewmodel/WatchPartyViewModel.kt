@@ -7,6 +7,7 @@ import com.example.model.ChatMessage
 import com.example.model.FloatingReaction
 import com.example.model.FriendParticipant
 import com.example.model.Movie
+import com.example.model.Participant
 import com.example.model.PartyTab
 import com.example.model.ScreenShareInfo
 import com.example.model.VideoViewMode
@@ -34,27 +35,14 @@ data class WatchPartyUiState(
   val isMyCameraOn: Boolean = true,
   val isMyMicMuted: Boolean = false,
   val isFrontCamera: Boolean = true,
-  val friend: FriendParticipant = FriendParticipant(),
+  // Other joined friends in the party. Default is empty (alone) until someone joins!
+  val participants: List<Participant> = emptyList(),
   val chatMessages: List<ChatMessage> = listOf(
     ChatMessage(
       id = "1",
-      senderName = "Jordan",
-      message = "Hey Alex! Ready to watch together! 🍿",
-      timestamp = "8:30 PM",
-      isFromMe = false
-    ),
-    ChatMessage(
-      id = "2",
-      senderName = "Alex",
-      message = "Awesome! Sharing my screen and movie stream now",
-      timestamp = "8:31 PM",
-      isFromMe = true
-    ),
-    ChatMessage(
-      id = "3",
-      senderName = "Jordan",
-      message = "Looks super clear in 1080p, let's go! 🔥",
-      timestamp = "8:31 PM",
+      senderName = "System",
+      message = "🎉 Welcome to your WatchParty room! Share the code to invite friends.",
+      timestamp = "Now",
       isFromMe = false
     )
   ),
@@ -65,7 +53,14 @@ data class WatchPartyUiState(
   val showScreenShareDialog: Boolean = false,
   val showInviteDialog: Boolean = false,
   val showAddCustomMovieDialog: Boolean = false
-)
+) {
+  // Total members in party = You (1) + any other joined participants
+  val totalMemberCount: Int
+    get() = 1 + participants.count { it.isConnected }
+
+  val isFriendJoined: Boolean
+    get() = participants.any { it.isConnected }
+}
 
 class WatchPartyViewModel : ViewModel() {
   private val _uiState = MutableStateFlow(WatchPartyUiState())
@@ -147,7 +142,8 @@ class WatchPartyViewModel : ViewModel() {
           resolution = "1080p 60fps",
           bitrate = "6.5 Mbps",
           latencyMs = 18,
-          sharedAudio = true
+          sharedAudio = true,
+          presenterName = it.userName
         ),
         currentMovie = movieToPlay,
         showScreenShareDialog = false
@@ -155,7 +151,7 @@ class WatchPartyViewModel : ViewModel() {
     }
 
     val time = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
-    addSystemChatNotice("Alex started sharing screen: $sourceTitle", time)
+    addSystemChatNotice("${_uiState.value.userName} started sharing screen: $sourceTitle (Video camera remains active)", time)
     sendReaction("💻")
   }
 
@@ -168,6 +164,37 @@ class WatchPartyViewModel : ViewModel() {
     }
     val time = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
     addSystemChatNotice("Screen sharing stopped", time)
+  }
+
+  // Join a simulated friend (or remove when leaving)
+  fun addFriendToRoom(name: String = "Jordan") {
+    if (_uiState.value.participants.any { it.name == name && it.isConnected }) return
+    val newFriend = Participant(
+      id = UUID.randomUUID().toString(),
+      name = name,
+      isMe = false,
+      isConnected = true,
+      isCameraOn = true,
+      isMicMuted = false,
+      isScreenSharing = false,
+      pingMs = (20..35).random()
+    )
+    _uiState.update {
+      it.copy(participants = it.participants + newFriend)
+    }
+    val time = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
+    addSystemChatNotice("$name joined the party room 🎉", time)
+  }
+
+  fun removeParticipant(participantId: String) {
+    val participant = _uiState.value.participants.find { it.id == participantId }
+    _uiState.update {
+      it.copy(participants = it.participants.filterNot { p -> p.id == participantId })
+    }
+    participant?.let {
+      val time = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
+      addSystemChatNotice("${it.name} left the room", time)
+    }
   }
 
   fun toggleMyCamera() {
@@ -229,26 +256,29 @@ class WatchPartyViewModel : ViewModel() {
     )
     _uiState.update { it.copy(chatMessages = it.chatMessages + newMsg) }
 
-    // Friendly automated reaction from Jordan to keep watch party active
-    viewModelScope.launch {
-      delay(2000)
-      val friendReplies = listOf(
-        "Totally agree! 😄",
-        "Haha that scene was crazy! 🍿",
-        "Wait pause in 5 mins, grabbing water!",
-        "Screen quality looks great on my side! 👍",
-        "Look at that cinematography! 🔥"
-      )
-      val reply = friendReplies.random()
-      val friendTime = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
-      val friendMsg = ChatMessage(
-        id = UUID.randomUUID().toString(),
-        senderName = _uiState.value.friend.name,
-        message = reply,
-        timestamp = friendTime,
-        isFromMe = false
-      )
-      _uiState.update { it.copy(chatMessages = it.chatMessages + friendMsg) }
+    // Only generate friend reply if someone has joined the room
+    val joinedFriend = _uiState.value.participants.firstOrNull { it.isConnected }
+    if (joinedFriend != null) {
+      viewModelScope.launch {
+        delay(2000)
+        val friendReplies = listOf(
+          "Totally agree! 😄",
+          "Haha that scene was crazy! 🍿",
+          "Wait pause in 5 mins, grabbing water!",
+          "Screen quality looks great on my side! 👍",
+          "Look at that cinematography! 🔥"
+        )
+        val reply = friendReplies.random()
+        val friendTime = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
+        val friendMsg = ChatMessage(
+          id = UUID.randomUUID().toString(),
+          senderName = joinedFriend.name,
+          message = reply,
+          timestamp = friendTime,
+          isFromMe = false
+        )
+        _uiState.update { it.copy(chatMessages = it.chatMessages + friendMsg) }
+      }
     }
   }
 
@@ -261,16 +291,18 @@ class WatchPartyViewModel : ViewModel() {
     )
     _uiState.update { it.copy(reactions = it.reactions + reaction) }
 
-    // Also simulate friend's reaction occasionally
-    viewModelScope.launch {
-      delay(1200)
-      val friendReaction = FloatingReaction(
-        id = UUID.randomUUID().toString(),
-        emoji = emoji,
-        senderName = _uiState.value.friend.name,
-        xOffsetFraction = (0.2f + Math.random().toFloat() * 0.6f)
-      )
-      _uiState.update { it.copy(reactions = it.reactions + friendReaction) }
+    val joinedFriend = _uiState.value.participants.firstOrNull { it.isConnected }
+    if (joinedFriend != null) {
+      viewModelScope.launch {
+        delay(1200)
+        val friendReaction = FloatingReaction(
+          id = UUID.randomUUID().toString(),
+          emoji = emoji,
+          senderName = joinedFriend.name,
+          xOffsetFraction = (0.2f + Math.random().toFloat() * 0.6f)
+        )
+        _uiState.update { it.copy(reactions = it.reactions + friendReaction) }
+      }
     }
   }
 

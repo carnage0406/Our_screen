@@ -45,8 +45,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import com.example.model.FriendParticipant
+import com.example.model.Participant
 import com.example.ui.theme.CinemaBackground
+import com.example.ui.theme.CinemaLiveRed
 import com.example.ui.theme.CinemaPrimary
 import com.example.ui.theme.CinemaSecondary
 import com.example.ui.theme.CinemaSuccess
@@ -56,7 +57,9 @@ import com.example.ui.theme.CinemaSurfaceVariant
 @Composable
 fun InviteFriendDialog(
   roomCode: String,
-  friend: FriendParticipant,
+  participants: List<Participant>,
+  onAddFriend: (String) -> Unit,
+  onRemoveFriend: (String) -> Unit,
   onDismiss: () -> Unit
 ) {
   val context = LocalContext.current
@@ -91,9 +94,9 @@ fun InviteFriendDialog(
               color = Color.White
             )
             Text(
-              text = "Invite friends to watch together",
+              text = if (participants.isEmpty()) "You are alone in this room" else "${participants.size + 1} people in room",
               style = MaterialTheme.typography.labelSmall,
-              color = Color.White.copy(alpha = 0.6f)
+              color = if (participants.isEmpty()) Color.White.copy(alpha = 0.6f) else CinemaSuccess
             )
           }
 
@@ -143,55 +146,111 @@ fun InviteFriendDialog(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Current Connected Friend Status
+        // Current Connected Participants
+        Text(
+          text = "Joined Participants (${participants.size + 1})",
+          fontSize = 12.sp,
+          fontWeight = FontWeight.SemiBold,
+          color = CinemaSecondary
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // You (Always present)
         Row(
           modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(CinemaSurfaceVariant)
-            .padding(12.dp),
+            .padding(10.dp),
           verticalAlignment = Alignment.CenterVertically
         ) {
           Box(
             modifier = Modifier
-              .size(38.dp)
+              .size(32.dp)
               .clip(CircleShape)
-              .background(CinemaPrimary.copy(alpha = 0.25f)),
+              .background(CinemaPrimary),
             contentAlignment = Alignment.Center
           ) {
-            Icon(
-              imageVector = Icons.Default.Person,
-              contentDescription = null,
-              tint = CinemaSecondary,
-              modifier = Modifier.size(22.dp)
-            )
+            Text("Y", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
           }
-          Spacer(modifier = Modifier.width(12.dp))
+          Spacer(modifier = Modifier.width(10.dp))
           Column(modifier = Modifier.weight(1f)) {
-            Text(
-              text = friend.name,
-              fontWeight = FontWeight.SemiBold,
-              color = Color.White,
-              fontSize = 13.sp
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(text = "You (Host)", fontWeight = FontWeight.SemiBold, color = Color.White, fontSize = 12.sp)
+            Text(text = "Online • Sharing controls", color = CinemaSuccess, fontSize = 10.sp)
+          }
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // Dynamic other participants
+        if (participants.isEmpty()) {
+          Box(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clip(RoundedCornerShape(10.dp))
+              .background(CinemaBackground.copy(alpha = 0.5f))
+              .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(10.dp))
+              .padding(12.dp),
+            contentAlignment = Alignment.Center
+          ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+              Text(
+                text = "No one else has joined yet",
+                color = Color.White.copy(alpha = 0.6f),
+                fontSize = 12.sp
+              )
+              Spacer(modifier = Modifier.height(6.dp))
+              Button(
+                onClick = { onAddFriend("Jordan") },
+                colors = ButtonDefaults.buttonColors(containerColor = CinemaSecondary.copy(alpha = 0.2f)),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.height(32.dp)
+              ) {
+                Text("+ Simulate Friend Joining", color = CinemaSecondary, fontSize = 11.sp)
+              }
+            }
+          }
+        } else {
+          participants.forEach { p ->
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 3.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(CinemaSurfaceVariant)
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
               Box(
                 modifier = Modifier
-                  .size(6.dp)
+                  .size(32.dp)
                   .clip(CircleShape)
-                  .background(if (friend.isConnected) CinemaSuccess else Color.Gray)
-              )
-              Spacer(modifier = Modifier.width(4.dp))
-              Text(
-                text = if (friend.isConnected) "Connected (${friend.pingMs}ms)" else "Disconnected",
-                color = if (friend.isConnected) CinemaSuccess else Color.Gray,
-                fontSize = 11.sp
-              )
+                  .background(CinemaSecondary),
+                contentAlignment = Alignment.Center
+              ) {
+                Text(p.name.take(1), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+              }
+              Spacer(modifier = Modifier.width(10.dp))
+              Column(modifier = Modifier.weight(1f)) {
+                Text(text = p.name, fontWeight = FontWeight.SemiBold, color = Color.White, fontSize = 12.sp)
+                Text(text = "Connected (${p.pingMs}ms)", color = CinemaSuccess, fontSize = 10.sp)
+              }
+              IconButton(
+                onClick = { onRemoveFriend(p.id) },
+                modifier = Modifier.size(28.dp)
+              ) {
+                Icon(
+                  imageVector = Icons.Default.Close,
+                  contentDescription = "Remove",
+                  tint = CinemaLiveRed,
+                  modifier = Modifier.size(16.dp)
+                )
+              }
             }
           }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(18.dp))
 
         // Buttons
         Row(

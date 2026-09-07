@@ -57,6 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.model.Participant
 import com.example.model.PartyTab
 import com.example.model.VideoViewMode
 import com.example.ui.camera.CameraVideoFeed
@@ -180,6 +181,8 @@ fun WatchPartyApp(
         if (!uiState.isFullscreen) {
           TopPartyHeader(
             roomCode = uiState.roomCode,
+            memberCount = uiState.totalMemberCount,
+            participants = uiState.participants,
             isScreenSharing = uiState.screenShareInfo.isSharing,
             viewMode = uiState.viewMode,
             onOpenInvite = { viewModel.showInviteDialog(true) },
@@ -270,7 +273,9 @@ fun WatchPartyApp(
       if (uiState.showInviteDialog) {
         InviteFriendDialog(
           roomCode = uiState.roomCode,
-          friend = uiState.friend,
+          participants = uiState.participants,
+          onAddFriend = { name -> viewModel.addFriendToRoom(name) },
+          onRemoveFriend = { id -> viewModel.removeParticipant(id) },
           onDismiss = { viewModel.showInviteDialog(false) }
         )
       }
@@ -290,6 +295,8 @@ fun WatchPartyApp(
 @Composable
 fun TopPartyHeader(
   roomCode: String,
+  memberCount: Int,
+  participants: List<Participant>,
   isScreenSharing: Boolean,
   viewMode: VideoViewMode,
   onOpenInvite: () -> Unit,
@@ -334,13 +341,13 @@ fun TopPartyHeader(
             modifier = Modifier
               .size(6.dp)
               .clip(CircleShape)
-              .background(CinemaSuccess)
+              .background(if (participants.isNotEmpty()) CinemaSuccess else CinemaSecondary)
           )
           Spacer(modifier = Modifier.width(4.dp))
           Text(
-            text = "Jordan • Watching live",
+            text = if (participants.isEmpty()) "Alone in party (1)" else "${participants.first().name}${if (participants.size > 1) " +${participants.size - 1}" else ""} • Live ($memberCount)",
             fontSize = 10.sp,
-            color = CinemaSuccess,
+            color = if (participants.isNotEmpty()) CinemaSuccess else Color.White.copy(alpha = 0.7f),
             fontWeight = FontWeight.Medium
           )
         }
@@ -429,14 +436,16 @@ fun WatchTheaterContent(
   viewModel: WatchPartyViewModel,
   modifier: Modifier = Modifier
 ) {
+  val connectedFriends = uiState.participants.filter { it.isConnected }
+
   if (uiState.viewMode == VideoViewMode.SPLIT_SCREEN) {
-    // Split Screen Mode: Movie on top, side-by-side cams on bottom
+    // Split Screen Mode: Movie/ScreenShare on top, side-by-side or solo cam on bottom
     Column(modifier = modifier.fillMaxSize().padding(12.dp)) {
-      // Movie Player (55% height)
+      // Movie / Screen Share Player
       Box(
         modifier = Modifier
           .fillMaxWidth()
-          .weight(0.55f)
+          .weight(if (connectedFriends.isEmpty()) 0.65f else 0.55f)
       ) {
         MoviePlayerView(
           movie = uiState.currentMovie,
@@ -456,17 +465,18 @@ fun WatchTheaterContent(
 
       Spacer(modifier = Modifier.height(10.dp))
 
-      // Dual Camera Windows (Side-by-side on bottom 45%)
+      // Camera Windows: Only show joined participants + You!
+      // When screen sharing, your camera stays fully visible and active!
       Row(
         modifier = Modifier
           .fillMaxWidth()
-          .weight(0.45f),
+          .weight(if (connectedFriends.isEmpty()) 0.35f else 0.45f),
         horizontalArrangement = Arrangement.spacedBy(10.dp)
       ) {
-        // User's Camera
+        // User's Camera (Always shows You - whether alone or with friends, screen sharing or watching)
         CameraVideoFeed(
           isMyCamera = true,
-          userName = "${uiState.userName} (You)",
+          userName = if (uiState.screenShareInfo.isSharing) "${uiState.userName} (Screen Presenter • Cam ON)" else "${uiState.userName} (You)",
           isCameraActive = uiState.isMyCameraOn,
           isMicMuted = uiState.isMyMicMuted,
           isFrontCamera = uiState.isFrontCamera,
@@ -478,24 +488,26 @@ fun WatchTheaterContent(
             .fillMaxHeight()
         )
 
-        // Friend's Camera
-        CameraVideoFeed(
-          isMyCamera = false,
-          userName = uiState.friend.name,
-          isCameraActive = uiState.friend.isCameraOn,
-          isMicMuted = uiState.friend.isMicMuted,
-          onToggleCamera = {},
-          onToggleMic = {},
-          modifier = Modifier
-            .weight(1f)
-            .fillMaxHeight()
-        )
+        // Only render joined friends (if any)
+        connectedFriends.forEach { friend ->
+          CameraVideoFeed(
+            isMyCamera = false,
+            userName = friend.name,
+            isCameraActive = friend.isCameraOn,
+            isMicMuted = friend.isMicMuted,
+            onToggleCamera = {},
+            onToggleMic = {},
+            modifier = Modifier
+              .weight(1f)
+              .fillMaxHeight()
+          )
+        }
       }
     }
   } else {
-    // Theater Mode: Big Movie Display with floating Picture-in-Picture camera bubbles!
+    // Theater Mode: Big Movie/ScreenShare Display with floating Picture-in-Picture camera bubbles!
     Column(modifier = modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 6.dp)) {
-      // Main Movie Player Container with Floating PiP Video Chat
+      // Main Movie / Screen Share Player Container
       Box(
         modifier = Modifier
           .fillMaxWidth()
@@ -517,16 +529,17 @@ fun WatchTheaterContent(
         )
 
         // Floating Camera Window 1: User's Camera (Bottom-Left)
+        // If sharing screen: camera remains on and visibly active!
         Box(
           modifier = Modifier
             .align(Alignment.BottomStart)
             .padding(start = 12.dp, bottom = 48.dp)
-            .width(130.dp)
-            .height(98.dp)
+            .width(if (uiState.screenShareInfo.isSharing) 140.dp else 130.dp)
+            .height(102.dp)
         ) {
           CameraVideoFeed(
             isMyCamera = true,
-            userName = "You",
+            userName = if (uiState.screenShareInfo.isSharing) "You (Sharing)" else "You",
             isCameraActive = uiState.isMyCameraOn,
             isMicMuted = uiState.isMyMicMuted,
             isFrontCamera = uiState.isFrontCamera,
@@ -537,23 +550,26 @@ fun WatchTheaterContent(
           )
         }
 
-        // Floating Camera Window 2: Friend's Camera (Bottom-Right)
-        Box(
-          modifier = Modifier
-            .align(Alignment.BottomEnd)
-            .padding(end = 12.dp, bottom = 48.dp)
-            .width(130.dp)
-            .height(98.dp)
-        ) {
-          CameraVideoFeed(
-            isMyCamera = false,
-            userName = uiState.friend.name,
-            isCameraActive = uiState.friend.isCameraOn,
-            isMicMuted = uiState.friend.isMicMuted,
-            onToggleCamera = {},
-            onToggleMic = {},
-            modifier = Modifier.fillMaxSize()
-          )
+        // Floating Camera Window for other joined participants (ONLY shown if someone actually joined!)
+        if (connectedFriends.isNotEmpty()) {
+          val friend = connectedFriends.first()
+          Box(
+            modifier = Modifier
+              .align(Alignment.BottomEnd)
+              .padding(end = 12.dp, bottom = 48.dp)
+              .width(130.dp)
+              .height(102.dp)
+          ) {
+            CameraVideoFeed(
+              isMyCamera = false,
+              userName = friend.name,
+              isCameraActive = friend.isCameraOn,
+              isMicMuted = friend.isMicMuted,
+              onToggleCamera = {},
+              onToggleMic = {},
+              modifier = Modifier.fillMaxSize()
+            )
+          }
         }
       }
 
